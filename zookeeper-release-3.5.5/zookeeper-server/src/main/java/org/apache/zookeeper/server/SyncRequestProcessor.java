@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -49,7 +49,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
     private static final Logger LOG = LoggerFactory.getLogger(SyncRequestProcessor.class);
     private final ZooKeeperServer zks;
     private final LinkedBlockingQueue<Request> queuedRequests =
-        new LinkedBlockingQueue<Request>();
+            new LinkedBlockingQueue<Request>();
     private final RequestProcessor nextProcessor;
 
     private Thread snapInProcess = null;
@@ -70,7 +70,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
     private final Request requestOfDeath = Request.requestOfDeath;
 
     public SyncRequestProcessor(ZooKeeperServer zks,
-            RequestProcessor nextProcessor) {
+                                RequestProcessor nextProcessor) {
         super("SyncThread:" + zks.getServerId(), zks
                 .getZooKeeperServerListener());
         this.zks = zks;
@@ -102,7 +102,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
 
             // we do this in an attempt to ensure that not all of the servers
             // in the ensemble take a snapshot at the same time
-            int randRoll = r.nextInt(snapCount/2);
+            int randRoll = r.nextInt(snapCount / 2);
             while (true) {
                 Request si = null;
                 if (toFlush.isEmpty()) {
@@ -122,7 +122,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
                     if (zks.getZKDatabase().append(si)) {
                         logCount++;
                         if (logCount > (snapCount / 2 + randRoll)) {
-                            randRoll = r.nextInt(snapCount/2);
+                            randRoll = r.nextInt(snapCount / 2);
                             // roll the log
                             zks.getZKDatabase().rollLog();
                             // take a snapshot
@@ -130,14 +130,14 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
                                 LOG.warn("Too busy to snap, skipping");
                             } else {
                                 snapInProcess = new ZooKeeperThread("Snapshot Thread") {
-                                        public void run() {
-                                            try {
-                                                zks.takeSnapshot();
-                                            } catch(Exception e) {
-                                                LOG.warn("Unexpected exception", e);
-                                            }
+                                    public void run() {
+                                        try {
+                                            zks.takeSnapshot();
+                                        } catch (Exception e) {
+                                            LOG.warn("Unexpected exception", e);
                                         }
-                                    };
+                                    }
+                                };
                                 snapInProcess.start();
                             }
                             logCount = 0;
@@ -150,7 +150,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
                         if (nextProcessor != null) {
                             nextProcessor.processRequest(si);
                             if (nextProcessor instanceof Flushable) {
-                                ((Flushable)nextProcessor).flush();
+                                ((Flushable) nextProcessor).flush();
                             }
                         }
                         continue;
@@ -163,15 +163,14 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
             }
         } catch (Throwable t) {
             handleException(this.getName(), t);
-        } finally{
+        } finally {
             running = false;
         }
         LOG.info("SyncRequestProcessor exited!");
     }
 
     private void flush(LinkedList<Request> toFlush)
-        throws IOException, RequestProcessorException
-    {
+            throws IOException, RequestProcessorException {
         if (toFlush.isEmpty())
             return;
 
@@ -183,7 +182,7 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
             }
         }
         if (nextProcessor != null && nextProcessor instanceof Flushable) {
-            ((Flushable)nextProcessor).flush();
+            ((Flushable) nextProcessor).flush();
         }
     }
 
@@ -191,13 +190,13 @@ public class SyncRequestProcessor extends ZooKeeperCriticalThread implements
         LOG.info("Shutting down");
         queuedRequests.add(requestOfDeath);
         try {
-            if(running){
+            if (running) {
                 this.join();
             }
             if (!toFlush.isEmpty()) {
                 flush(toFlush);
             }
-        } catch(InterruptedException e) {
+        } catch (InterruptedException e) {
             LOG.warn("Interrupted while wating for " + this + " to finish");
         } catch (IOException e) {
             LOG.warn("Got IO exception during shutdown");
