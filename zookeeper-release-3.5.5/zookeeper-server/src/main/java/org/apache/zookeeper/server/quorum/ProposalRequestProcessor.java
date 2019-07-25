@@ -43,6 +43,7 @@ public class ProposalRequestProcessor implements RequestProcessor {
             RequestProcessor nextProcessor) {
         this.zks = zks;
         this.nextProcessor = nextProcessor;
+        // 首先通过SyncProcessor持久化到磁盘，然后通过AckRequestProcessor给Leader自己发送ACK包。
         AckRequestProcessor ackProcessor = new AckRequestProcessor(zks.getLeader());
         syncProcessor = new SyncRequestProcessor(zks, ackProcessor);
     }
@@ -72,13 +73,16 @@ public class ProposalRequestProcessor implements RequestProcessor {
             zks.getLeader().processSync((LearnerSyncRequest)request);
         } else {
             nextProcessor.processRequest(request);
+            // 事务请求，首先通过SyncProcessor持久化到磁盘，然后通过AckRequestProcessor给Leader自己发送ACK包。
             if (request.getHdr() != null) {
                 // We need to sync and get consensus on any transactions
                 try {
+                    // 发起提案
                     zks.getLeader().propose(request);
                 } catch (XidRolloverException e) {
                     throw new RequestProcessorException(e.getMessage(), e);
                 }
+                // 事务日志持久化到磁盘，然后通过AckRequestProcessor给Leader自己发送ACK包
                 syncProcessor.processRequest(request);
             }
         }

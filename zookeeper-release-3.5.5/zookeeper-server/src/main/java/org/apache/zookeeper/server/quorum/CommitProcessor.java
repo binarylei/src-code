@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,6 +19,7 @@
 package org.apache.zookeeper.server.quorum;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -37,31 +38,31 @@ import org.apache.zookeeper.server.ZooKeeperServerListener;
  * locally submitted requests. The trick is that locally submitted requests that
  * change the state of the system will come back as incoming committed requests,
  * so we need to match them up.
- *
+ * <p>
  * The CommitProcessor is multi-threaded. Communication between threads is
  * handled via queues, atomics, and wait/notifyAll synchronized on the
  * processor. The CommitProcessor acts as a gateway for allowing requests to
  * continue with the remainder of the processing pipeline. It will allow many
  * read requests but only a single write request to be in flight simultaneously,
  * thus ensuring that write requests are processed in transaction id order.
- *
- *   - 1   commit processor main thread, which watches the request queues and
- *         assigns requests to worker threads based on their sessionId so that
- *         read and write requests for a particular session are always assigned
- *         to the same thread (and hence are guaranteed to run in order).
- *   - 0-N worker threads, which run the rest of the request processor pipeline
- *         on the requests. If configured with 0 worker threads, the primary
- *         commit processor thread runs the pipeline directly.
- *
+ * <p>
+ * - 1   commit processor main thread, which watches the request queues and
+ * assigns requests to worker threads based on their sessionId so that
+ * read and write requests for a particular session are always assigned
+ * to the same thread (and hence are guaranteed to run in order).
+ * - 0-N worker threads, which run the rest of the request processor pipeline
+ * on the requests. If configured with 0 worker threads, the primary
+ * commit processor thread runs the pipeline directly.
+ * <p>
  * Typical (default) thread counts are: on a 32 core machine, 1 commit
  * processor thread and 32 worker threads.
- *
+ * <p>
  * Multi-threading constraints:
- *   - Each session's requests must be processed in order.
- *   - Write requests must be processed in zxid order
- *   - Must ensure no race condition between writes in one session that would
- *     trigger a watch being set by a read request in another session
- *
+ * - Each session's requests must be processed in order.
+ * - Write requests must be processed in zxid order
+ * - Must ensure no race condition between writes in one session that would
+ * trigger a watch being set by a read request in another session
+ * <p>
  * The current implementation solves the third constraint by simply allowing no
  * read requests to be processed in parallel with write requests.
  */
@@ -69,33 +70,47 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
         RequestProcessor {
     private static final Logger LOG = LoggerFactory.getLogger(CommitProcessor.class);
 
-    /** Default: numCores */
+    /**
+     * Default: numCores
+     */
     public static final String ZOOKEEPER_COMMIT_PROC_NUM_WORKER_THREADS =
-        "zookeeper.commitProcessor.numWorkerThreads";
-    /** Default worker pool shutdown timeout in ms: 5000 (5s) */
+            "zookeeper.commitProcessor.numWorkerThreads";
+    /**
+     * Default worker pool shutdown timeout in ms: 5000 (5s)
+     */
     public static final String ZOOKEEPER_COMMIT_PROC_SHUTDOWN_TIMEOUT =
-        "zookeeper.commitProcessor.shutdownTimeout";
+            "zookeeper.commitProcessor.shutdownTimeout";
 
     /**
      * Requests that we are holding until the commit comes in.
+     * <pre>
+     * queuedRequests -> nextPending
+     *                -> committedRequests  -> currentlyCommitting
+     * </pre>
      */
     protected final LinkedBlockingQueue<Request> queuedRequests =
-        new LinkedBlockingQueue<Request>();
+            new LinkedBlockingQueue<Request>();
 
     /**
      * Requests that have been committed.
      */
     protected final LinkedBlockingQueue<Request> committedRequests =
-        new LinkedBlockingQueue<Request>();
+            new LinkedBlockingQueue<Request>();
 
-    /** Request for which we are currently awaiting a commit */
+    /**
+     * Request for which we are currently awaiting a commit
+     */
     protected final AtomicReference<Request> nextPending =
-        new AtomicReference<Request>();
-    /** Request currently being committed (ie, sent off to next processor) */
+            new AtomicReference<Request>();
+    /**
+     * Request currently being committed (ie, sent off to next processor)
+     */
     private final AtomicReference<Request> currentlyCommitting =
-        new AtomicReference<Request>();
+            new AtomicReference<Request>();
 
-    /** The number of requests currently being processed */
+    /**
+     * The number of requests currently being processed
+     */
     protected AtomicInteger numRequestsProcessing = new AtomicInteger(0);
 
     RequestProcessor nextProcessor;
@@ -130,6 +145,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
         return currentlyCommitting.get() != null;
     }
 
+    // 判断是否是事务请求
     protected boolean needCommit(Request request) {
         switch (request.type) {
             case OpCode.create:
@@ -144,7 +160,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
             case OpCode.setACL:
                 return true;
             case OpCode.sync:
-                return matchSyncs;    
+                return matchSyncs;
             case OpCode.createSession:
             case OpCode.closeSession:
                 return !request.isLocalSession();
@@ -158,11 +174,12 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
         Request request;
         try {
             while (!stopped) {
-                synchronized(this) {
-                    while (
-                        !stopped &&
-                        ((queuedRequests.isEmpty() || isWaitingForCommit() || isProcessingCommit()) &&
-                         (committedRequests.isEmpty() || isProcessingRequest()))) {
+                synchronized (this) {
+                    // nextPending 和 currentlyCommitting 都不为空，说明有事务请求正在处理
+                    // committedRequests 保存已经处理完的事务请求，处理后先进入currentlyCommitting
+                    while (!stopped &&
+                            ((queuedRequests.isEmpty() || isWaitingForCommit() || isProcessingCommit()) &&
+                                    (committedRequests.isEmpty() || isProcessingRequest()))) {
                         wait();
                     }
                 }
@@ -172,9 +189,8 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                  * find one for which we need to wait for a commit. We cannot
                  * process a read request while we are processing write request.
                  */
-                while (!stopped && !isWaitingForCommit() &&
-                       !isProcessingCommit() &&
-                       (request = queuedRequests.poll()) != null) {
+                while (!stopped && !isWaitingForCommit() && !isProcessingCommit() &&
+                        (request = queuedRequests.poll()) != null) {
                     if (needCommit(request)) {
                         nextPending.set(request);
                     } else {
@@ -196,8 +212,8 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
     }
 
     /*
-     * Separated this method from the main run loop
-     * for test purposes (ZOOKEEPER-1863)
+     * Separated this method from the main run loop for test purposes (ZOOKEEPER-1863)
+     * 处理已经处理完成的事务请求
      */
     protected void processCommitted() {
         Request request;
@@ -208,9 +224,9 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
             /*
              * ZOOKEEPER-1863: continue only if there is no new request
              * waiting in queuedRequests or it is waiting for a
-             * commit. 
+             * commit.
              */
-            if ( !isWaitingForCommit() && !queuedRequests.isEmpty()) {
+            if (!isWaitingForCommit() && !queuedRequests.isEmpty()) {
                 return;
             }
             request = committedRequests.poll();
@@ -223,16 +239,18 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
              */
             Request pending = nextPending.get();
             if (pending != null &&
-                pending.sessionId == request.sessionId &&
-                pending.cxid == request.cxid) {
+                    pending.sessionId == request.sessionId &&
+                    pending.cxid == request.cxid) {
                 // we want to send our version of the request.
                 // the pointer to the connection in the request
                 pending.setHdr(request.getHdr());
                 pending.setTxn(request.getTxn());
                 pending.zxid = request.zxid;
+
                 // Set currentlyCommitting so we will block until this
-                // completes. Cleared by CommitWorkRequest after
-                // nextProcessor returns.
+                // completes. Cleared by CommitWorkRequest after nextProcessor returns.
+                // nextProcessor 执行 doWork 后会将 currentlyCommitting 清空
+                // nextProcessor 为 SyncRequestProcessor 将写事务请求持久化到磁盘，防止事务丢失。
                 currentlyCommitting.set(pending);
                 nextPending.set(null);
                 sendToNextProcessor(pending);
@@ -242,23 +260,23 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                 currentlyCommitting.set(request);
                 sendToNextProcessor(request);
             }
-        }      
+        }
     }
 
     @Override
     public void start() {
         int numCores = Runtime.getRuntime().availableProcessors();
         int numWorkerThreads = Integer.getInteger(
-            ZOOKEEPER_COMMIT_PROC_NUM_WORKER_THREADS, numCores);
+                ZOOKEEPER_COMMIT_PROC_NUM_WORKER_THREADS, numCores);
         workerShutdownTimeoutMS = Long.getLong(
-            ZOOKEEPER_COMMIT_PROC_SHUTDOWN_TIMEOUT, 5000);
+                ZOOKEEPER_COMMIT_PROC_SHUTDOWN_TIMEOUT, 5000);
 
         LOG.info("Configuring CommitProcessor with "
-                 + (numWorkerThreads > 0 ? numWorkerThreads : "no")
-                 + " worker threads.");
+                + (numWorkerThreads > 0 ? numWorkerThreads : "no")
+                + " worker threads.");
         if (workerPool == null) {
             workerPool = new WorkerService(
-                "CommitProcWork", numWorkerThreads, true);
+                    "CommitProcWork", numWorkerThreads, true);
         }
         stopped = false;
         super.start();
@@ -288,7 +306,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
         public void cleanup() {
             if (!stopped) {
                 LOG.error("Exception thrown by downstream processor,"
-                          + " unable to continue.");
+                        + " unable to continue.");
                 CommitProcessor.this.halt();
             }
         }
@@ -309,7 +327,7 @@ public class CommitProcessor extends ZooKeeperCriticalThread implements
                  */
                 if (numRequestsProcessing.decrementAndGet() == 0) {
                     if (!queuedRequests.isEmpty() ||
-                        !committedRequests.isEmpty()) {
+                            !committedRequests.isEmpty()) {
                         wakeup();
                     }
                 }

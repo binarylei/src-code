@@ -1204,26 +1204,29 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
         return new SetSASLResponse(responseToken);
     }
 
-    // entry point for quorum/Learner.java
+    // Learner#syncWithLeader 和 Leader 同步数据时使用
     public ProcessTxnResult processTxn(TxnHeader hdr, Record txn) {
         return processTxn(null, hdr, txn);
     }
 
-    // entry point for FinalRequestProcessor.java
+    // FinalRequestProcessor 调用ZkDatabase方法执行最终读写操作。事务最终处理
     public ProcessTxnResult processTxn(Request request) {
         return processTxn(request, request.getHdr(), request.getTxn());
     }
 
-    private ProcessTxnResult processTxn(Request request, TxnHeader hdr,
-                                        Record txn) {
+    // 统一事务处理入口
+    private ProcessTxnResult processTxn(Request request, TxnHeader hdr, Record txn) {
         ProcessTxnResult rc;
         int opCode = request != null ? request.type : hdr.getType();
         long sessionId = request != null ? request.sessionId : hdr.getClientId();
         if (hdr != null) {
+            // 事务请求，rc 表示事务请求的处理结果
             rc = getZKDatabase().processTxn(hdr, txn);
         } else {
+            // 非事务请求
             rc = new ProcessTxnResult();
         }
+        // session 相关以后再看？
         if (opCode == OpCode.createSession) {
             if (hdr != null && txn instanceof CreateSessionTxn) {
                 CreateSessionTxn cst = (CreateSessionTxn) txn;
@@ -1234,9 +1237,7 @@ public class ZooKeeperServer implements SessionExpirer, ServerStats.Provider {
                 request.request.rewind();
                 sessionTracker.addSession(request.sessionId, timeout);
             } else {
-                LOG.warn("*****>>>>> Got "
-                        + txn.getClass() + " "
-                        + txn.toString());
+                LOG.warn("*****>>>>> Got " + txn.getClass() + " " + txn.toString());
             }
         } else if (opCode == OpCode.closeSession) {
             sessionTracker.removeSession(sessionId);

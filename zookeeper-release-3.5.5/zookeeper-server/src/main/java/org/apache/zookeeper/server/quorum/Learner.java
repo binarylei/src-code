@@ -352,9 +352,11 @@ public class Learner {
                 // the -1 indicates that this reply should not count as an ack for the new epoch
                 wrappedEpochBytes.putInt(-1);
             } else {
-                throw new IOException("Leaders epoch, " + newEpoch + " is less than accepted epoch, " + self.getAcceptedEpoch());
+                throw new IOException("Leaders epoch, " + newEpoch + " is less than accepted epoch, " +
+                        self.getAcceptedEpoch());
             }
-            QuorumPacket ackNewEpoch = new QuorumPacket(Leader.ACKEPOCH, lastLoggedZxid, epochBytes, null);
+            QuorumPacket ackNewEpoch = new QuorumPacket(Leader.ACKEPOCH,
+                    lastLoggedZxid, epochBytes, null);
             writePacket(ackNewEpoch, true);
             return ZxidUtils.makeZxid(newEpoch, 0);
         } else {
