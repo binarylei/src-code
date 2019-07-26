@@ -252,6 +252,7 @@ public class Learner {
         int remainingInitLimitTime = initLimitTime;
         long startNanoTime = nanoTime();
 
+        // 在 initLimitTime 时间范围内可以重试5次
         for (int tries = 0; tries < 5; tries++) {
             try {
                 // recalculate the init limit time because retries sleep for 1000 milliseconds
@@ -328,7 +329,9 @@ public class Learner {
         /*
          * Add sid to payload
          */
-        LearnerInfo li = new LearnerInfo(self.getId(), 0x10000, self.getQuorumVerifier().getVersion());
+        // 1. LearnerInfo:将Learner节点的信息(sid,protocolVersion,configVersion)发送给Leader
+        LearnerInfo li = new LearnerInfo(self.getId(),
+                0x10000, self.getQuorumVerifier().getVersion());
         ByteArrayOutputStream bsid = new ByteArrayOutputStream();
         BinaryOutputArchive boa = BinaryOutputArchive.getArchive(bsid);
         boa.writeRecord(li, "LearnerInfo");
@@ -336,6 +339,8 @@ public class Learner {
 
         writePacket(qp, true);
         readPacket(qp);
+
+        // 2. LEADERINFO:接收Leader的信息(zxid,epoch,protocolVersion)
         final long newEpoch = ZxidUtils.getEpochFromZxid(qp.getZxid());
         if (qp.getType() == Leader.LEADERINFO) {
             // we are connected to a 1.0 server so accept the new epoch and read the next packet
@@ -355,11 +360,13 @@ public class Learner {
                 throw new IOException("Leaders epoch, " + newEpoch + " is less than accepted epoch, " +
                         self.getAcceptedEpoch());
             }
+            // 3. ACKEPOCH:Learner回ACK给Leader
             QuorumPacket ackNewEpoch = new QuorumPacket(Leader.ACKEPOCH,
                     lastLoggedZxid, epochBytes, null);
             writePacket(ackNewEpoch, true);
             return ZxidUtils.makeZxid(newEpoch, 0);
         } else {
+            // NEWLEADER
             if (newEpoch > self.getAcceptedEpoch()) {
                 self.setAcceptedEpoch(newEpoch);
             }
