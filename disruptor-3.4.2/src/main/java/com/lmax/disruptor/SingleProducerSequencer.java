@@ -106,26 +106,30 @@ public final class SingleProducerSequencer extends SingleProducerSequencerFields
         if (n < 1 || n > bufferSize) {
             throw new IllegalArgumentException("n must be > 0 and < bufferSize");
         }
-
+        // nextValue 表示上次申请完毕的槽位
         long nextValue = this.nextValue;
 
         long nextSequence = nextValue + n;
         long wrapPoint = nextSequence - bufferSize;
+        // cachedValue 表示缓存的消费者槽位
         long cachedGatingSequence = this.cachedValue;
 
+        // wrapPoint > cachedGatingSequence 说明没有空余的槽位
+        // claim(long sequence) 可以动态修nextValue的值，一般只有在初始化的时候使用，不然可能引起消费混乱
         if (wrapPoint > cachedGatingSequence || cachedGatingSequence > nextValue) {
             cursor.setVolatile(nextValue);  // StoreLoad fence
 
             long minSequence;
+            // gatingSequences 表示真实的消费者槽位
             while (wrapPoint > (minSequence = Util.getMinimumSequence(gatingSequences, nextValue))) {
                 LockSupport.parkNanos(1L); // TODO: Use waitStrategy to spin?
             }
-
+            // 当消费者向前消费后，更新缓存的槽位
             this.cachedValue = minSequence;
         }
 
+        // 将成功申请的序号赋值给对象实例变量
         this.nextValue = nextSequence;
-
         return nextSequence;
     }
 

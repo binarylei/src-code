@@ -25,6 +25,10 @@ import org.apache.dubbo.common.extension.SPI;
  */
 public class SpiExtensionFactory implements ExtensionFactory {
 
+    /**
+     * 一、@SPI注解
+     * 二、默认返回@Adaptive注解的扩展
+     */
     @Override
     public <T> T getExtension(Class<T> type, String name) {
         if (type.isInterface() && type.isAnnotationPresent(SPI.class)) {

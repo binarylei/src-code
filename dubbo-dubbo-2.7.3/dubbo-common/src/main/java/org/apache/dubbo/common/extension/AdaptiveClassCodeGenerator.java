@@ -29,6 +29,9 @@ import org.apache.dubbo.common.logger.LoggerFactory;
 import org.apache.dubbo.common.utils.StringUtils;
 
 /**
+ * 动态代理：根据URL中的参数生成对应的实现类
+ * http://dubbo.apache.org/zh-cn/docs/source_code_guide/adaptive-extension.html
+ * 接口中必须有方法@Adaptive注解
  * Code generator for Adaptive class
  */
 public class AdaptiveClassCodeGenerator {
@@ -86,7 +89,8 @@ public class AdaptiveClassCodeGenerator {
     public String generate() {
         // no need to generate adaptive class since there's no adaptive method found.
         if (!hasAdaptiveMethod()) {
-            throw new IllegalStateException("No adaptive method exist on extension " + type.getName() + ", refuse to create the adaptive class!");
+            throw new IllegalStateException("No adaptive method exist on extension " +
+                    type.getName() + ", refuse to create the adaptive class!");
         }
 
         StringBuilder code = new StringBuilder();
@@ -211,12 +215,14 @@ public class AdaptiveClassCodeGenerator {
                 code.append(generateUrlAssignmentIndirectly(method));
             }
 
+            // 获取 @Adaptive 注解值
             String[] value = getMethodAdaptiveValue(adaptiveAnnotation);
 
             boolean hasInvocation = hasInvocationArgument(method);
             
             code.append(generateInvocationArgumentNullCheck(method));
-            
+
+            // 扩展类的名称 extName url.getParameter(value)
             code.append(generateExtNameAssignment(value, hasInvocation));
             // check extName == null?
             code.append(generateExtNameNullCheck(value));
@@ -248,17 +254,25 @@ public class AdaptiveClassCodeGenerator {
                 if (null != defaultExtName) {
                     if (!"protocol".equals(value[i])) {
                         if (hasInvocation) {
-                            getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                            getNameCode = String.format(
+                                    "url.getMethodParameter(methodName, \"%s\", \"%s\")",
+                                    value[i], defaultExtName);
                         } else {
-                            getNameCode = String.format("url.getParameter(\"%s\", \"%s\")", value[i], defaultExtName);
+                            getNameCode = String.format(
+                                    "url.getParameter(\"%s\", \"%s\")",
+                                    value[i], defaultExtName);
                         }
                     } else {
-                        getNameCode = String.format("( url.getProtocol() == null ? \"%s\" : url.getProtocol() )", defaultExtName);
+                        getNameCode = String.format(
+                                "( url.getProtocol() == null ? \"%s\" : url.getProtocol() )",
+                                defaultExtName);
                     }
                 } else {
                     if (!"protocol".equals(value[i])) {
                         if (hasInvocation) {
-                            getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                            getNameCode = String.format(
+                                    "url.getMethodParameter(methodName, \"%s\", \"%s\")",
+                                    value[i], defaultExtName);
                         } else {
                             getNameCode = String.format("url.getParameter(\"%s\")", value[i]);
                         }
@@ -269,12 +283,17 @@ public class AdaptiveClassCodeGenerator {
             } else {
                 if (!"protocol".equals(value[i])) {
                     if (hasInvocation) {
-                        getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                        getNameCode = String.format(
+                                "url.getMethodParameter(methodName, \"%s\", \"%s\")",
+                                value[i], defaultExtName);
                     } else {
-                        getNameCode = String.format("url.getParameter(\"%s\", %s)", value[i], getNameCode);
+                        getNameCode = String.format(
+                                "url.getParameter(\"%s\", %s)", value[i], getNameCode);
                     }
                 } else {
-                    getNameCode = String.format("url.getProtocol() == null ? (%s) : url.getProtocol()", getNameCode);
+                    getNameCode = String.format(
+                            "url.getProtocol() == null ? (%s) : url.getProtocol()",
+                            getNameCode);
                 }
             }
         }
@@ -286,7 +305,8 @@ public class AdaptiveClassCodeGenerator {
      * @return
      */
     private String generateExtensionAssignment() {
-        return String.format(CODE_EXTENSION_ASSIGNMENT, type.getName(), ExtensionLoader.class.getSimpleName(), type.getName());
+        return String.format(CODE_EXTENSION_ASSIGNMENT,
+                type.getName(), ExtensionLoader.class.getSimpleName(), type.getName());
     }
 
     /**
@@ -295,7 +315,9 @@ public class AdaptiveClassCodeGenerator {
     private String generateReturnAndInvocation(Method method) {
         String returnStatement = method.getReturnType().equals(void.class) ? "" : "return ";
         
-        String args = Arrays.stream(method.getParameters()).map(Parameter::getName).collect(Collectors.joining(", "));
+        String args = Arrays.stream(method.getParameters())
+                .map(Parameter::getName)
+                .collect(Collectors.joining(", "));
 
         return returnStatement + String.format("extension.%s(%s);\n", method.getName(), args);
     }
@@ -322,9 +344,11 @@ public class AdaptiveClassCodeGenerator {
      * get value of adaptive annotation or if empty return splitted simple name
      */
     private String[] getMethodAdaptiveValue(Adaptive adaptiveAnnotation) {
+        // @Adaptive 注解配置
         String[] value = adaptiveAnnotation.value();
         // value is not set, use the value generated from class name as the key
         if (value.length == 0) {
+            // 类名小写
             String splitName = StringUtils.camelToSplitName(type.getSimpleName(), ".");
             value = new String[]{splitName};
         }

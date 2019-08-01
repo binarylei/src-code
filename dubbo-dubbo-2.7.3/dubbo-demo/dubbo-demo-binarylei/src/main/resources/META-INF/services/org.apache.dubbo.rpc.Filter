@@ -1,0 +1,5 @@
+test1=com.github.binarylei.dubbo.rpc.Test1Filter
+test2=com.github.binarylei.dubbo.rpc.Test2Filter
+test3=com.github.binarylei.dubbo.rpc.Test3Filter
+test4=com.github.binarylei.dubbo.rpc.Test4Filter
+test5=com.github.binarylei.dubbo.rpc.Test5Filter

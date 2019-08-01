@@ -544,7 +544,8 @@ public class Disruptor<T> {
     EventHandlerGroup<T> createWorkerPool(
             final Sequence[] barrierSequences, final WorkHandler<? super T>[] workHandlers) {
         final SequenceBarrier sequenceBarrier = ringBuffer.newBarrier(barrierSequences);
-        final WorkerPool<T> workerPool = new WorkerPool<>(ringBuffer, sequenceBarrier, exceptionHandler, workHandlers);
+        final WorkerPool<T> workerPool = new WorkerPool<>(ringBuffer, sequenceBarrier,
+                exceptionHandler, workHandlers);
 
 
         consumerRepository.add(workerPool, sequenceBarrier);
